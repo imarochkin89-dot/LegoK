@@ -1,0 +1,37 @@
+{
+  "id": "/",
+  "name": "Контур — планировщик проектов",
+  "short_name": "Контур",
+  "description": "Приватное рабочее пространство для задач, сроков, бюджета и команды.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#e6efe4",
+  "theme_color": "#1f2f27",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/kontur-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/kontur-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/kontur-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false
+}

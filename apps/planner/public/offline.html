@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#1f2f27" />
+    <title>Контур — нет подключения</title>
+    <style>
+      *{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px;background:#f4f1e9;color:#1f2f27;font-family:Inter,Arial,sans-serif;display:grid;place-items:center}.card{width:min(520px,100%);padding:38px;border:1px solid #d7d3ca;border-radius:22px;background:#fffef9;box-shadow:0 24px 70px rgba(31,47,39,.12);text-align:center}.mark{width:66px;height:66px;margin:0 auto 25px;border-radius:20px;background:#1f2f27;display:grid;place-items:center}.mark:before{content:"";width:27px;height:27px;border:6px solid #ea6a34;border-top-color:transparent;border-radius:9px;transform:rotate(45deg)}small{color:#8a6b54;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}h1{margin:10px 0 12px;font-family:Georgia,serif;font-size:34px;font-weight:500}p{margin:0;color:#66716b;font-size:14px;line-height:1.6}button{margin-top:25px;min-height:44px;padding:0 20px;border:0;border-radius:10px;background:#1f2f27;color:white;font-size:13px;font-weight:800;cursor:pointer}@media(max-width:520px){.card{padding:30px 22px}h1{font-size:28px}}
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="mark"></div>
+      <small>Контур · офлайн</small>
+      <h1>Нет подключения к сети</h1>
+      <p>Если проект уже открывался на этом устройстве, вернитесь назад. Локальные изменения синхронизируются после восстановления соединения.</p>
+      <button onclick="location.reload()">Попробовать снова</button>
+    </main>
+  </body>
+</html>

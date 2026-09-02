@@ -1,0 +1,16 @@
+{
+  "name": "kontur-community-edition",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source project planner and client portal",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "setup": "npm ci --prefix apps/planner && npm ci --prefix apps/portal",
+    "build": "npm run build --prefix apps/planner && npm run build --prefix apps/portal",
+    "test": "npm run build --prefix apps/planner && npm test --prefix apps/portal",
+    "check:public": "node scripts/check-public-source.mjs"
+  },
+  "license": "AGPL-3.0-only"
+}
