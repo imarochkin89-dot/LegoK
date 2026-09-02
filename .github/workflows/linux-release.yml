@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: kontur-local-release-${{ github.ref }}
+  group: kontur-linux-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
