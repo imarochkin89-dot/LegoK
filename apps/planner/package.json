@@ -1,6 +1,6 @@
 {
   "name": "kontur-community-planner",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open-source project workspace from Kontur Community Edition",
   "private": true,
   "type": "module",

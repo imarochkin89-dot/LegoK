@@ -1,0 +1,142 @@
+name: Build Windows Local Edition
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "distribution/windows-server/**"
+      - "package.json"
+      - ".github/workflows/windows-release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            apps/planner/package-lock.json
+            apps/portal/package-lock.json
+            distribution/windows-server/runtime-package/package-lock.json
+
+      - name: Test local runtime
+        run: npm run test:windows-dist
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          Get-ChildItem distribution/windows-server -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Error ("{0}: {1}" -f $_.Name, ($errors.Message -join "; "))
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Install and build applications
+        shell: pwsh
+        run: |
+          npm ci --prefix apps/planner --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix apps/portal --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location apps/planner
+          & .\node_modules\.bin\vinext.cmd build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/finalize-build.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          Push-Location apps/portal
+          & .\node_modules\.bin\vinext.cmd build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          npm ci --prefix distribution/windows-server/runtime-package --omit=dev --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Download verified portable Node.js
+        shell: pwsh
+        run: |
+          $nodeVersion = node -p "process.versions.node"
+          $baseUrl = "https://nodejs.org/dist/v$nodeVersion"
+          Invoke-WebRequest -Uri "$baseUrl/SHASUMS256.txt" -OutFile "$env:RUNNER_TEMP\SHASUMS256.txt"
+          $fileName = "node-v$nodeVersion-win-x64.zip"
+          $checksumLine = (Get-Content "$env:RUNNER_TEMP\SHASUMS256.txt") | Where-Object { $_ -match ("\s+" + [regex]::Escape($fileName) + "$") } | Select-Object -First 1
+          if (-not $checksumLine) { throw "Node.js checksum was not found." }
+          $expected = $checksumLine.Split()[0].ToUpperInvariant()
+          $archive = "$env:RUNNER_TEMP\$fileName"
+          Invoke-WebRequest -Uri "$baseUrl/$fileName" -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw "Node.js checksum mismatch." }
+          $expanded = "$env:RUNNER_TEMP\node-expanded"
+          Expand-Archive $archive $expanded -Force
+          $target = "distribution\windows-server\node"
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item "$expanded\node-v$nodeVersion-win-x64\*" $target -Recurse -Force
+
+      - name: Assemble autonomous ZIP
+        id: package
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $packageName = "Kontur-Local-Edition-$version-win-x64"
+          Set-Content distribution/windows-server/OFFLINE-BUNDLE "Version $version" -Encoding ASCII
+          $stageParent = Join-Path $env:RUNNER_TEMP "kontur-package"
+          $stage = Join-Path $stageParent $packageName
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          $excludedDirectories = @(
+            (Join-Path $env:GITHUB_WORKSPACE ".git"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\planner\node_modules"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\portal\node_modules"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\planner\.wrangler"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\portal\.wrangler"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\planner\.next"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\portal\.next"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\planner\.vinext"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\portal\.vinext"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\planner\.sites-runtime"),
+            (Join-Path $env:GITHUB_WORKSPACE "apps\portal\.sites-runtime")
+          )
+          & robocopy.exe $env:GITHUB_WORKSPACE $stage /E /R:2 /W:1 /XD @excludedDirectories /XF .env .env.local | Out-Null
+          if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE" }
+          $zip = Join-Path $env:GITHUB_WORKSPACE "$packageName.zip"
+          & tar.exe -a -c -f $zip -C $stageParent $packageName
+          if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed." }
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $checksum = "$hash  $packageName.zip"
+          Set-Content "$zip.sha256" $checksum -Encoding ASCII
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "checksum=$zip.sha256" >> $env:GITHUB_OUTPUT
+          "name=$packageName" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.checksum }}
+
+      - name: Publish GitHub release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.package.outputs.version }}
+          name: Kontur Local Edition v${{ steps.package.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.checksum }}

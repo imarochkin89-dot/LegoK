@@ -1,5 +1,9 @@
 # Развёртывание
 
+## Локальная сеть
+
+Для постоянной работы на Windows Server используйте готовую [Local Edition](../distribution/windows-server/README-RU.md). Она запускает Planner и Portal с отдельными локальными D1/R2-совместимыми хранилищами, настраивает HTTPS, автозапуск и правила брандмауэра. Docker и WSL не требуются.
+
 ## Рекомендуемая схема
 
 Разверните `apps/planner` и `apps/portal` как два независимых Cloudflare Worker-приложения.
