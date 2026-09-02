@@ -259,7 +259,8 @@ systemctl enable "$SERVICE_NAME" >/dev/null
 
 rollback_application() {
   if [[ -d "$PREVIOUS_APP" ]]; then
-    local failed_app="$INSTALL_ROOT/app.failed.$(date -u +%Y%m%d%H%M%S)"
+    local failed_app
+    failed_app="$INSTALL_ROOT/app.failed.$(date -u +%Y%m%d%H%M%S)"
     systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
     mv "$APP_ROOT" "$failed_app"
     mv "$PREVIOUS_APP" "$APP_ROOT"
