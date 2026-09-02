@@ -40,6 +40,13 @@ test("Basic authentication maps a local account to trusted identity headers", ()
   });
 });
 
+test("non-ASCII display names are encoded into valid HTTP headers", () => {
+  const headers = trustedIdentityHeaders({ email: "owner@example.test", displayName: "Администратор" });
+  assert.equal(headers["oai-authenticated-user-name"], "owner@example.test");
+  assert.equal(decodeURIComponent(headers["oai-authenticated-user-full-name"]), "Администратор");
+  assert.doesNotThrow(() => new Headers(headers));
+});
+
 test("untrusted identity and proxy headers are replaced", () => {
   const user = { email: "owner@example.test", displayName: "Owner" };
   const headers = sanitizeForwardHeaders({

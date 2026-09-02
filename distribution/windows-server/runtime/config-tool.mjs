@@ -104,10 +104,14 @@ export function authenticateBasic(value, users) {
 }
 
 export function trustedIdentityHeaders(user) {
+  const displayName = String(user.displayName || user.email || "Пользователь");
+  let encodedName;
+  try { encodedName = encodeURIComponent(displayName); } catch { encodedName = encodeURIComponent(String(user.email || "user")); }
+  const legacyName = /^[\x20-\x7e]{1,200}$/.test(displayName) ? displayName : String(user.email || "user");
   return {
     "oai-authenticated-user-email": user.email,
-    "oai-authenticated-user-name": user.displayName,
-    "oai-authenticated-user-full-name": encodeURIComponent(user.displayName),
+    "oai-authenticated-user-name": legacyName,
+    "oai-authenticated-user-full-name": encodedName,
     "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
   };
 }
