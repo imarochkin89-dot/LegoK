@@ -68,7 +68,7 @@ for _ in {1..150}; do
     show_logs
     exit 1
   fi
-  if curl --silent --insecure --output /dev/null \
+  if curl --silent --insecure --noproxy '*' --connect-timeout 2 --max-time 5 --output /dev/null \
     --resolve planner.kontur.test:18443:127.0.0.1 \
     --write-out '%{http_code}' https://planner.kontur.test:18443/ | grep -qx '401'; then
     READY="true"
@@ -78,11 +78,11 @@ for _ in {1..150}; do
 done
 [[ "$READY" == "true" ]] || { show_logs; exit 1; }
 
-PLANNER_STATUS="$(curl --silent --insecure --output /dev/null \
+PLANNER_STATUS="$(curl --silent --insecure --noproxy '*' --connect-timeout 2 --max-time 10 --output /dev/null \
   --resolve planner.kontur.test:18443:127.0.0.1 \
   --user 'owner@example.test:Strong-Integration-Password' \
   --write-out '%{http_code}' https://planner.kontur.test:18443/)"
-PORTAL_STATUS="$(curl --silent --insecure --output /dev/null \
+PORTAL_STATUS="$(curl --silent --insecure --noproxy '*' --connect-timeout 2 --max-time 10 --output /dev/null \
   --resolve portal.kontur.test:18443:127.0.0.1 \
   --write-out '%{http_code}' https://portal.kontur.test:18443/)"
 
