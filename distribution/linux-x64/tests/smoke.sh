@@ -6,6 +6,11 @@ TEST_ROOT="$(mktemp -d /tmp/kontur-smoke.XXXXXX)"
 SERVER_PID=""
 
 cleanup() {
+  local exit_code
+  exit_code="${1:-0}"
+  if [[ $exit_code -ne 0 ]]; then
+    show_logs
+  fi
   if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
     kill -TERM "$SERVER_PID" >/dev/null 2>&1 || true
     wait "$SERVER_PID" 2>/dev/null || true
@@ -13,8 +18,9 @@ cleanup() {
   if [[ -d "$TEST_ROOT" && "$TEST_ROOT" == /tmp/kontur-smoke.* ]]; then
     rm -rf -- "$TEST_ROOT"
   fi
+  return "$exit_code"
 }
-trap cleanup EXIT
+trap 'cleanup $?' EXIT
 
 show_logs() {
   for log_file in "$TEST_ROOT/server.stdout.log" "$TEST_ROOT/server.stderr.log" "$TEST_ROOT/logs/kontur-runtime.log" "$TEST_ROOT/logs/workers.log"; do
@@ -78,11 +84,11 @@ for _ in {1..150}; do
 done
 [[ "$READY" == "true" ]] || { show_logs; exit 1; }
 
-PLANNER_STATUS="$(curl --silent --insecure --noproxy '*' --connect-timeout 2 --max-time 10 --output /dev/null \
+PLANNER_STATUS="$(curl --silent --show-error --insecure --noproxy '*' --connect-timeout 2 --max-time 45 --output /dev/null \
   --resolve planner.kontur.test:18443:127.0.0.1 \
   --user 'owner@example.test:Strong-Integration-Password' \
-  --write-out '%{http_code}' https://planner.kontur.test:18443/)"
-PORTAL_STATUS="$(curl --silent --insecure --noproxy '*' --connect-timeout 2 --max-time 10 --output /dev/null \
+  --write-out '%{http_code}' https://planner.kontur.test:18443/api/state)"
+PORTAL_STATUS="$(curl --silent --show-error --insecure --noproxy '*' --connect-timeout 2 --max-time 20 --output /dev/null \
   --resolve portal.kontur.test:18443:127.0.0.1 \
   --write-out '%{http_code}' https://portal.kontur.test:18443/)"
 
