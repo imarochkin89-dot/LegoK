@@ -3,7 +3,7 @@ import { extname, join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
 const ignored = new Set([".git", "node_modules", "dist", ".next", ".vinext", ".wrangler"]);
-const textExtensions = new Set([".js", ".jsx", ".ts", ".tsx", ".json", ".jsonc", ".md", ".mjs", ".sql", ".css", ".html", ".xml", ".yml", ".yaml", ".txt", ""]);
+const textExtensions = new Set([".js", ".jsx", ".ts", ".tsx", ".json", ".jsonc", ".md", ".mjs", ".sql", ".css", ".html", ".xml", ".yml", ".yaml", ".txt", ".sh", ".ps1", ""]);
 const rules = [
   ["personal login", new RegExp("imar" + "ochkin", "i")],
   ["personal name", /Иван\s+Марочкин/i],
@@ -11,7 +11,7 @@ const rules = [
   ["Sites project id", new RegExp("appg" + "prj_[a-z0-9]+", "i")],
   ["OpenAI app id", new RegExp("oai" + "app_[a-z0-9]+", "i")],
   ["bypass token label", /siwc_bypass_bearer_token/i],
-  ["private IPv4 address", /\b10(?:\.\d{1,3}){3}\b/],
+  ["private IPv4 address", /\b10\.(?!0\.0\.0\b)\d{1,3}(?:\.\d{1,3}){2}\b/],
 ];
 
 async function* files(directory) {

@@ -1,0 +1,118 @@
+name: Build Linux Local Edition
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "distribution/linux-x64/**"
+      - "distribution/windows-server/runtime/**"
+      - "package.json"
+      - ".github/workflows/linux-release.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kontur-local-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            apps/planner/package-lock.json
+            apps/portal/package-lock.json
+            distribution/linux-x64/runtime-package/package-lock.json
+
+      - name: Check Linux scripts
+        run: |
+          bash -n distribution/linux-x64/*.sh distribution/linux-x64/tests/*.sh
+          shellcheck distribution/linux-x64/*.sh distribution/linux-x64/tests/*.sh
+
+      - name: Test local runtime
+        run: npm run test:linux-dist
+
+      - name: Install and build applications
+        run: |
+          npm ci --prefix apps/planner --no-audit --no-fund
+          npm ci --prefix apps/portal --no-audit --no-fund
+          npm run build --prefix apps/planner
+          npm run build --prefix apps/portal
+          npm ci --prefix distribution/linux-x64/runtime-package --omit=dev --no-audit --no-fund
+
+      - name: Smoke-test Planner and Portal
+        run: distribution/linux-x64/tests/smoke.sh
+
+      - name: Download verified portable Node.js
+        run: |
+          node_version="$(node -p 'process.versions.node')"
+          base_url="https://nodejs.org/dist/v${node_version}"
+          file_name="node-v${node_version}-linux-x64.tar.xz"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/SHASUMS256.txt" "$base_url/SHASUMS256.txt"
+          grep "  ${file_name}$" "$RUNNER_TEMP/SHASUMS256.txt" > "$RUNNER_TEMP/node.sha256"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/$file_name" "$base_url/$file_name"
+          (cd "$RUNNER_TEMP" && sha256sum --check node.sha256)
+          mkdir -p distribution/linux-x64/node
+          tar -xJf "$RUNNER_TEMP/$file_name" -C "$RUNNER_TEMP"
+          cp -a "$RUNNER_TEMP/node-v${node_version}-linux-x64/." distribution/linux-x64/node/
+
+      - name: Assemble autonomous archive
+        id: package
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          package_name="Kontur-Local-Edition-${version}-linux-x64"
+          stage_parent="$RUNNER_TEMP/kontur-package"
+          stage="$stage_parent/$package_name"
+          mkdir -p "$stage"
+          tar \
+            --exclude='./.git' \
+            --exclude='./apps/planner/node_modules' \
+            --exclude='./apps/portal/node_modules' \
+            --exclude='./apps/planner/.wrangler' \
+            --exclude='./apps/portal/.wrangler' \
+            --exclude='./apps/planner/.next' \
+            --exclude='./apps/portal/.next' \
+            --exclude='./apps/planner/.vinext' \
+            --exclude='./apps/portal/.vinext' \
+            --exclude='./apps/planner/.sites-runtime' \
+            --exclude='./apps/portal/.sites-runtime' \
+            --exclude='./.env' \
+            --exclude='./.env.local' \
+            -cf - . | tar -C "$stage" -xf -
+          printf 'Version %s\n' "$version" > "$stage/distribution/linux-x64/OFFLINE-BUNDLE"
+          archive="$GITHUB_WORKSPACE/$package_name.tar.gz"
+          tar -C "$stage_parent" -czf "$archive" "$package_name"
+          (cd "$GITHUB_WORKSPACE" && sha256sum "$package_name.tar.gz" > "$package_name.tar.gz.sha256")
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "checksum=$archive.sha256" >> "$GITHUB_OUTPUT"
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+
+      - name: Publish GitHub release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.package.outputs.version }}
+          name: Kontur Local Edition v${{ steps.package.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}

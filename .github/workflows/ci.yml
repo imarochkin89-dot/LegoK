@@ -48,3 +48,17 @@ jobs:
             }
           }
           if ($failed) { exit 1 }
+
+  linux-distribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - run: npm run test:linux-dist
+      - name: Check Linux scripts
+        run: |
+          bash -n distribution/linux-x64/*.sh distribution/linux-x64/tests/*.sh
+          shellcheck distribution/linux-x64/*.sh distribution/linux-x64/tests/*.sh

@@ -4,7 +4,7 @@
 
 > **Не разработчик?** Откройте [простую пошаговую инструкцию](docs/START-HERE-RU.md). В ней показано, как запустить проект на Windows и как опубликовать его через ChatGPT Sites без ручной настройки сервера.
 
-> **Нужна работа внутри локальной сети?** Используйте [дистрибутив для Windows Server](distribution/windows-server/README-RU.md): установка одним PowerShell-скриптом, локальные базы и файлы, HTTPS, автозапуск и доступ из нескольких VLAN.
+> **Нужна работа внутри локальной сети?** Используйте готовый дистрибутив для [Linux](distribution/linux-x64/README-RU.md) или [Windows Server](distribution/windows-server/README-RU.md): установка одним скриптом, локальные базы и файлы, HTTPS, автозапуск и доступ из нескольких VLAN.
 
 ## Возможности
 
@@ -73,7 +73,7 @@ PUBLISH_SECRET=replace-with-the-same-random-value
 
 Для локального запуска скопируйте `.env.example` в `.env` внутри каждого приложения: шаблоны уже используют порты 4173 и 4174. Для публикации замените origin на постоянные HTTPS-адреса. Секрет можно создать командой `openssl rand -hex 32`. Не добавляйте `.env` и рабочие значения в Git.
 
-Подробности находятся в [руководстве по развёртыванию](docs/DEPLOYMENT.md), [инструкции для Windows Server](distribution/windows-server/README-RU.md) и [описании архитектуры](docs/ARCHITECTURE.md).
+Подробности находятся в [руководстве по развёртыванию](docs/DEPLOYMENT.md), инструкциях для [Linux](distribution/linux-x64/README-RU.md) и [Windows Server](distribution/windows-server/README-RU.md), а также в [описании архитектуры](docs/ARCHITECTURE.md).
 
 ## Безопасность и приватность
 

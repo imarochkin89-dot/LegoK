@@ -1,6 +1,6 @@
 {
   "name": "kontur-community-portal",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Public client portal for Kontur Community Edition",
   "private": true,
   "engines": {

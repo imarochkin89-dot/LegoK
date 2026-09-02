@@ -37,6 +37,15 @@ export function parsePort(value, fallback) {
   return port;
 }
 
+export function validateIPv4Network(value) {
+  const text = String(value || "").trim();
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d|[12]\d|3[0-2])$/.exec(text);
+  if (!match || match.slice(1, 5).some((octet) => Number(octet) > 255)) {
+    throw new Error(`Некорректная IPv4-подсеть: ${value}`);
+  }
+  return text;
+}
+
 export function generatePassword(length = 24) {
   if (!Number.isInteger(length) || length < 16) throw new Error("Пароль должен содержать не менее 16 символов.");
   return Array.from({ length }, () => PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)]).join("");
@@ -116,6 +125,9 @@ export async function loadConfig(configPath) {
   for (const key of ["httpPort", "httpsPort", "plannerWorkerPort", "portalWorkerPort"]) {
     config.network[key] = parsePort(config.network[key]);
   }
+  config.network.allowedNetworks = Array.isArray(config.network.allowedNetworks)
+    ? config.network.allowedNetworks.map(validateIPv4Network)
+    : [];
   if (config.network.plannerHost === config.network.portalHost) {
     throw new Error("Планировщик и портал должны использовать разные DNS-имена.");
   }
@@ -144,6 +156,10 @@ function env(name, fallback = "") {
   return value == null || value === "" ? fallback : value;
 }
 
+function envPath(name, fallback) {
+  return resolve(env(name, fallback));
+}
+
 function createInitialConfig() {
   const rawInstallRoot = env("KONTUR_INSTALL_ROOT");
   if (!rawInstallRoot) throw new Error("Не задан KONTUR_INSTALL_ROOT.");
@@ -163,14 +179,20 @@ function createInitialConfig() {
       httpsPort,
       plannerWorkerPort: parsePort(env("KONTUR_PLANNER_WORKER_PORT"), 14173),
       portalWorkerPort: parsePort(env("KONTUR_PORTAL_WORKER_PORT"), 14174),
+      allowedNetworks: env("KONTUR_ALLOWED_NETWORKS")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map(validateIPv4Network),
     },
     paths: {
       installRoot,
-      app: join(installRoot, "app"),
-      data: join(installRoot, "data"),
-      logs: join(installRoot, "logs"),
-      tlsPfx: join(installRoot, "tls", "gateway.pfx"),
-      pidFile: join(installRoot, "run", "kontur.pid.json"),
+      app: envPath("KONTUR_APP_ROOT", join(installRoot, "app")),
+      data: envPath("KONTUR_DATA_ROOT", join(installRoot, "data")),
+      logs: envPath("KONTUR_LOG_ROOT", join(installRoot, "logs")),
+      tlsPfx: envPath("KONTUR_TLS_PFX", join(installRoot, "tls", "gateway.pfx")),
+      pidFile: envPath("KONTUR_PID_FILE", join(installRoot, "run", "kontur.pid.json")),
+      runtimeConfig: envPath("KONTUR_RUNTIME_CONFIG_ROOT", join(installRoot, "run")),
     },
     tls: { pfxPassword: env("KONTUR_PFX_PASSWORD") || randomBytes(32).toString("base64url") },
     secrets: { shareSecret: env("KONTUR_SHARE_SECRET") || randomBytes(48).toString("base64url") },
@@ -235,21 +257,36 @@ async function commandListUsers(configPath) {
   process.stdout.write(`${JSON.stringify(config.users.map(({ email, displayName, enabled }) => ({ email, displayName, enabled })), null, 2)}\n`);
 }
 
-async function main() {
+async function commandSetNetworks(configPath) {
+  const config = await loadConfig(configPath);
+  const raw = option("--networks") || env("KONTUR_ALLOWED_NETWORKS");
+  const networks = String(raw || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(validateIPv4Network);
+  if (networks.length < 1) throw new Error("Укажите хотя бы одну разрешённую IPv4-подсеть.");
+  config.network.allowedNetworks = networks;
+  await writeConfig(configPath, config);
+  process.stdout.write(`${JSON.stringify({ allowedNetworks: networks })}\n`);
+}
+
+export async function runConfigTool() {
   const [command] = process.argv.slice(2);
   const configPath = resolve(option("--config") || env("KONTUR_CONFIG_PATH"));
   if (!command || !configPath) {
-    throw new Error("Использование: config-tool.mjs <create|add-user|remove-user|list-users> --config <путь>");
+    throw new Error("Использование: config-tool.mjs <create|add-user|remove-user|list-users|set-networks> --config <путь>");
   }
   if (command === "create") await commandCreate(configPath);
   else if (command === "add-user") await commandAddUser(configPath);
   else if (command === "remove-user") await commandRemoveUser(configPath);
   else if (command === "list-users") await commandListUsers(configPath);
+  else if (command === "set-networks") await commandSetNetworks(configPath);
   else throw new Error(`Неизвестная команда: ${command}`);
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  main().catch((error) => {
+  runConfigTool().catch((error) => {
     process.stderr.write(`Ошибка: ${error.message}\n`);
     process.exitCode = 1;
   });

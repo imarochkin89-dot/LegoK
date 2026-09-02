@@ -1,0 +1,9 @@
+{
+  "name": "kontur-local-runtime-linux",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Runtime dependency bundle for Kontur Community Edition on Linux x64",
+  "dependencies": {
+    "wrangler": "4.124.0"
+  }
+}

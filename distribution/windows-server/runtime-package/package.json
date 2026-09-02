@@ -1,6 +1,6 @@
 {
   "name": "kontur-local-runtime",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Runtime dependency bundle for Kontur Community Edition on Windows Server",
   "dependencies": {

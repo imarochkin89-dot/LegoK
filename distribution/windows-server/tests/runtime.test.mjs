@@ -6,10 +6,11 @@ import {
   generatePassword,
   publicOrigin,
   trustedIdentityHeaders,
+  validateIPv4Network,
   validateHost,
   verifyPassword,
 } from "../runtime/config-tool.mjs";
-import { createLocalWranglerConfig, sanitizeForwardHeaders } from "../runtime/server.mjs";
+import { createLocalWranglerConfig, isClientAllowed, sanitizeForwardHeaders } from "../runtime/server.mjs";
 
 test("DNS names are normalized and invalid hostnames are rejected", () => {
   assert.equal(validateHost("Planner.Example.Test."), "planner.example.test");
@@ -75,4 +76,14 @@ test("Planner and Portal receive separate local storage bindings", () => {
   assert.notEqual(planner.r2_buckets[0].bucket_name, portal.r2_buckets[0].bucket_name);
   assert.equal(planner.vars.PUBLIC_SHARE_ORIGIN, "https://portal.example.test");
   assert.equal(portal.vars.PLANNER_ORIGIN, "https://planner.example.test:8443");
+});
+
+test("IPv4 VLAN allowlist accepts only configured networks and loopback", () => {
+  const networks = [validateIPv4Network("192.0.2.0/24"), validateIPv4Network("198.51.100.16/28")];
+  assert.equal(isClientAllowed("::ffff:192.0.2.42", networks), true);
+  assert.equal(isClientAllowed("198.51.100.31", networks), true);
+  assert.equal(isClientAllowed("198.51.100.32", networks), false);
+  assert.equal(isClientAllowed("203.0.113.5", networks), false);
+  assert.equal(isClientAllowed("127.0.0.1", networks), true);
+  assert.throws(() => validateIPv4Network("192.0.2.999/24"));
 });

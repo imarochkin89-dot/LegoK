@@ -47,6 +47,29 @@ export function sanitizeForwardHeaders(headers, user, remoteAddress) {
   return next;
 }
 
+function ipv4ToInteger(value) {
+  const parts = String(value || "").split(".").map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return parts.reduce((result, part) => ((result << 8) | part) >>> 0, 0);
+}
+
+export function isClientAllowed(remoteAddress, networks) {
+  const rules = Array.isArray(networks) ? networks : [];
+  if (rules.length === 0) return true;
+  const address = String(remoteAddress || "").replace(/^::ffff:/, "");
+  if (address === "127.0.0.1" || address === "::1") return true;
+  const numericAddress = ipv4ToInteger(address);
+  if (numericAddress == null) return false;
+  return rules.some((rule) => {
+    const [base, rawPrefix] = String(rule).split("/");
+    const numericBase = ipv4ToInteger(base);
+    const prefix = Number(rawPrefix);
+    if (numericBase == null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
+    const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+    return (numericAddress & mask) === (numericBase & mask);
+  });
+}
+
 export function createLocalWranglerConfig(base, options) {
   const config = {
     ...base,
@@ -109,6 +132,7 @@ async function exists(path) {
 
 async function locateWrangler(appRoot) {
   const candidates = [
+    join(appRoot, "distribution", "linux-x64", "runtime-package", "node_modules", "wrangler", "bin", "wrangler.js"),
     join(appRoot, "distribution", "windows-server", "runtime-package", "node_modules", "wrangler", "bin", "wrangler.js"),
     join(appRoot, "apps", "planner", "node_modules", "wrangler", "bin", "wrangler.js"),
     join(appRoot, "apps", "portal", "node_modules", "wrangler", "bin", "wrangler.js"),
@@ -122,8 +146,10 @@ async function writeWorkerConfigs(config) {
   const portalServer = join(config.paths.app, "apps", "portal", "dist", "server");
   const plannerBase = JSON.parse(await readFile(join(plannerServer, "wrangler.json"), "utf8"));
   const portalBase = JSON.parse(await readFile(join(portalServer, "wrangler.json"), "utf8"));
-  const plannerPath = join(plannerServer, "wrangler.local.json");
-  const portalPath = join(portalServer, "wrangler.local.json");
+  const runtimeConfig = config.paths.runtimeConfig || dirname(config.paths.pidFile);
+  await mkdir(runtimeConfig, { recursive: true });
+  const plannerPath = join(runtimeConfig, "wrangler.planner.json");
+  const portalPath = join(runtimeConfig, "wrangler.portal.json");
   const planner = createLocalWranglerConfig(plannerBase, {
     name: "kontur-local-planner",
     databaseName: "kontur-local-planner",
@@ -144,6 +170,10 @@ async function writeWorkerConfigs(config) {
       PUBLISH_SECRET: config.secrets.shareSecret,
     },
   });
+  planner.main = resolve(plannerServer, planner.main);
+  portal.main = resolve(portalServer, portal.main);
+  if (planner.assets?.directory) planner.assets.directory = resolve(plannerServer, planner.assets.directory);
+  if (portal.assets?.directory) portal.assets.directory = resolve(portalServer, portal.assets.directory);
   await writeFile(plannerPath, `${JSON.stringify(planner, null, 2)}\n`, "utf8");
   await writeFile(portalPath, `${JSON.stringify(portal, null, 2)}\n`, "utf8");
   return { plannerPath, portalPath };
@@ -229,7 +259,7 @@ async function acquirePidFile(path) {
   await handle.close();
 }
 
-async function main() {
+export async function runServer() {
   const configPath = resolve(option("--config"));
   if (!option("--config")) throw new Error("Укажите --config <путь>.");
   const config = await loadConfig(configPath);
@@ -307,6 +337,10 @@ async function main() {
     const pfx = await readFile(config.paths.tlsPfx);
     const limiter = authLimiter();
     gateway = https.createServer({ pfx, passphrase: config.tls.pfxPassword }, (request, response) => {
+      if (!isClientAllowed(requestIp(request), config.network.allowedNetworks)) {
+        sendText(response, 403, "Доступ из этой подсети запрещён.");
+        return;
+      }
       const host = safeHost(request.headers.host);
       if (host === config.network.plannerHost) {
         const ip = requestIp(request);
@@ -340,6 +374,10 @@ async function main() {
     });
 
     redirectServer = http.createServer((request, response) => {
+      if (!isClientAllowed(requestIp(request), config.network.allowedNetworks)) {
+        sendText(response, 403, "Доступ из этой подсети запрещён.");
+        return;
+      }
       const host = safeHost(request.headers.host);
       if (![config.network.plannerHost, config.network.portalHost].includes(host)) {
         sendText(response, 421, "Неизвестное имя сервера.");
@@ -367,5 +405,5 @@ async function main() {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  main().catch(() => { process.exitCode = 1; });
+  runServer().catch(() => { process.exitCode = 1; });
 }
