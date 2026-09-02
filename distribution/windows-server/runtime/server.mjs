@@ -308,8 +308,8 @@ export async function runServer() {
     const wrangler = await locateWrangler(config.paths.app);
     const { plannerPath, portalPath } = await writeWorkerConfigs(config);
     const definitions = [
-      { name: "Планировщик", port: config.network.plannerWorkerPort, configPath: plannerPath, state: join(config.paths.data, "planner") },
-      { name: "Публичный портал", port: config.network.portalWorkerPort, configPath: portalPath, state: join(config.paths.data, "portal") },
+      { name: "Планировщик", port: config.network.plannerWorkerPort, inspectorPort: config.network.plannerInspectorPort, configPath: plannerPath, state: join(config.paths.data, "planner") },
+      { name: "Публичный портал", port: config.network.portalWorkerPort, inspectorPort: config.network.portalInspectorPort, configPath: portalPath, state: join(config.paths.data, "portal") },
     ];
     for (const definition of definitions) {
       await mkdir(definition.state, { recursive: true });
@@ -320,6 +320,8 @@ export async function runServer() {
         "--local",
         "--ip", "127.0.0.1",
         "--port", String(definition.port),
+        "--inspector-ip", "127.0.0.1",
+        "--inspector-port", String(definition.inspectorPort),
         "--persist-to", definition.state,
         "--show-interactive-dev-session=false",
       ], {

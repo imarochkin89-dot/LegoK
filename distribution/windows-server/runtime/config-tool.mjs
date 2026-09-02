@@ -122,8 +122,20 @@ export async function loadConfig(configPath) {
   if (!config.network || !config.paths || !config.tls || !config.secrets) throw new Error("Конфигурация повреждена.");
   config.network.plannerHost = validateHost(config.network.plannerHost);
   config.network.portalHost = validateHost(config.network.portalHost);
-  for (const key of ["httpPort", "httpsPort", "plannerWorkerPort", "portalWorkerPort"]) {
-    config.network[key] = parsePort(config.network[key]);
+  const portDefaults = {
+    httpPort: 80,
+    httpsPort: 443,
+    plannerWorkerPort: 14173,
+    portalWorkerPort: 14174,
+    plannerInspectorPort: 19173,
+    portalInspectorPort: 19174,
+  };
+  for (const [key, fallback] of Object.entries(portDefaults)) {
+    config.network[key] = parsePort(config.network[key], fallback);
+  }
+  const configuredPorts = Object.keys(portDefaults).map((key) => config.network[key]);
+  if (new Set(configuredPorts).size !== configuredPorts.length) {
+    throw new Error("Сетевые порты Контура должны быть различными.");
   }
   config.network.allowedNetworks = Array.isArray(config.network.allowedNetworks)
     ? config.network.allowedNetworks.map(validateIPv4Network)
@@ -179,6 +191,8 @@ function createInitialConfig() {
       httpsPort,
       plannerWorkerPort: parsePort(env("KONTUR_PLANNER_WORKER_PORT"), 14173),
       portalWorkerPort: parsePort(env("KONTUR_PORTAL_WORKER_PORT"), 14174),
+      plannerInspectorPort: parsePort(env("KONTUR_PLANNER_INSPECTOR_PORT"), 19173),
+      portalInspectorPort: parsePort(env("KONTUR_PORTAL_INSPECTOR_PORT"), 19174),
       allowedNetworks: env("KONTUR_ALLOWED_NETWORKS")
         .split(",")
         .map((value) => value.trim())
@@ -207,6 +221,9 @@ function createInitialConfig() {
   if (config.network.plannerHost === config.network.portalHost) {
     throw new Error("Планировщик и портал должны использовать разные DNS-имена.");
   }
+  const ports = [config.network.httpPort, config.network.httpsPort, config.network.plannerWorkerPort,
+    config.network.portalWorkerPort, config.network.plannerInspectorPort, config.network.portalInspectorPort];
+  if (new Set(ports).size !== ports.length) throw new Error("Сетевые порты Контура должны быть различными.");
   return { config, credentials: { email: adminEmail, password: adminPassword } };
 }
 
